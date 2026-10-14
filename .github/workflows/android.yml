@@ -94,15 +94,14 @@ jobs:
           STORE_PASSWORD: ${{ secrets.WIFI_PORTAL_PASSWORD }}
         run: |
           set -euo pipefail
-          export PASS_ENV=STORE_PASSWORD
-          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype PKCS12 -storepass:env PASS_ENV -alias portal >/dev/null 2>&1; then
+          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype PKCS12 -storepass:env STORE_PASSWORD -alias portal >/dev/null 2>&1; then
             echo "::error::A senha WIFI_PORTAL_PASSWORD não abre o arquivo recebido em WIFI_PORTAL_KEYSTORE, ou o alias portal não existe. Confira que ambos foram gerados do mesmo arquivo e senha."
             exit 1
           fi
           # Checa também a senha da chave privada, não apenas a senha do contêiner.
           TEMP_KEYSTORE="$RUNNER_TEMP/signing-check.p12"
           trap 'rm -f "$TEMP_KEYSTORE"' EXIT
-          if ! keytool -importkeystore -noprompt -srckeystore "$ANDROID_KEYSTORE_PATH" -srcstoretype PKCS12 -srcstorepass:env PASS_ENV -srcalias portal -srckeypass:env PASS_ENV -destkeystore "$TEMP_KEYSTORE" -deststoretype PKCS12 -deststorepass:env PASS_ENV -destkeypass:env PASS_ENV >/dev/null 2>&1; then
+          if ! keytool -importkeystore -noprompt -srckeystore "$ANDROID_KEYSTORE_PATH" -srcstoretype PKCS12 -srcstorepass:env STORE_PASSWORD -srcalias portal -srckeypass:env STORE_PASSWORD -destkeystore "$TEMP_KEYSTORE" -deststoretype PKCS12 -deststorepass:env STORE_PASSWORD -destkeypass:env STORE_PASSWORD >/dev/null 2>&1; then
             echo "::error::O arquivo abre, mas a chave privada portal não pode ser desbloqueada com a mesma senha. Verifique a senha interna da chave."
             exit 1
           fi
