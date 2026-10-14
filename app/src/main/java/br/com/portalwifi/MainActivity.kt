@@ -479,7 +479,7 @@ class MainActivity : Activity() {
                 val ssid = prefs.getString("custom_ssid", null) ?: ""
                 val password = prefs.getString("custom_pass", null) ?: ""
                 val configBuilder = SoftApConfiguration.Builder()
-                val wifiSsid = WifiSsid.fromUtf8Text(ssid)
+                val wifiSsid = WifiSsid::class.java.getMethod("fromUtf8Text", String::class.java).invoke(null, ssid) as WifiSsid
                 configBuilder.javaClass.getMethod("setWifiSsid", WifiSsid::class.java).invoke(configBuilder, wifiSsid)
                 configBuilder.javaClass.getMethod("setPassphrase", String::class.java, Integer.TYPE)
                     .invoke(configBuilder, password, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
