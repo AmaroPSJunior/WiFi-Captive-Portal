@@ -19,8 +19,8 @@ android {
             signingPath?.let {
                 storeFile = file(it)
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                keyAlias = "portal"
+                keyPassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
             }
         }
     }
