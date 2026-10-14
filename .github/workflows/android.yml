@@ -87,6 +87,26 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/portal-release.jks"
           test -s "$RUNNER_TEMP/portal-release.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/portal-release.jks" >> "$GITHUB_ENV"
+      - name: Diagnosticar credenciais de assinatura sem expor segredos
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        env:
+          STORE_PASSWORD: ${{ secrets.WIFI_PORTAL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export PASS_ENV=STORE_PASSWORD
+          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype PKCS12 -storepass:env PASS_ENV -alias portal >/dev/null 2>&1; then
+            echo "::error::A senha WIFI_PORTAL_PASSWORD não abre o arquivo recebido em WIFI_PORTAL_KEYSTORE, ou o alias portal não existe. Confira que ambos foram gerados do mesmo arquivo e senha."
+            exit 1
+          fi
+          # Checa também a senha da chave privada, não apenas a senha do contêiner.
+          TEMP_KEYSTORE="$RUNNER_TEMP/signing-check.p12"
+          trap 'rm -f "$TEMP_KEYSTORE"' EXIT
+          if ! keytool -importkeystore -noprompt -srckeystore "$ANDROID_KEYSTORE_PATH" -srcstoretype PKCS12 -srcstorepass:env PASS_ENV -srcalias portal -srckeypass:env PASS_ENV -destkeystore "$TEMP_KEYSTORE" -deststoretype PKCS12 -deststorepass:env PASS_ENV -destkeypass:env PASS_ENV >/dev/null 2>&1; then
+            echo "::error::O arquivo abre, mas a chave privada portal não pode ser desbloqueada com a mesma senha. Verifique a senha interna da chave."
+            exit 1
+          fi
+          echo "Keystore e chave privada validados com os Secrets atuais."
       - name: Compilar release assinada
         if: steps.signing.outputs.ready == 'true'
         env:
