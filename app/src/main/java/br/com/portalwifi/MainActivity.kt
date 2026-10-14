@@ -59,6 +59,10 @@ class MainActivity : Activity() {
     private lateinit var counterView: TextView
     private lateinit var uptimeView: TextView
     private lateinit var primary: Button
+    private lateinit var qrView: ImageView
+    private lateinit var qrHelp: TextView
+    private val portalSettings by lazy { PortalSettings(this) }
+    private lateinit var sitesList: LinearLayout
     private lateinit var speedValue: TextView
     private lateinit var durationValue: TextView
     private var kbps = 128
@@ -159,6 +163,19 @@ class MainActivity : Activity() {
         copyWifi.setOnClickListener { copy("Nome da rede", networkName) }
         copyPass.setOnClickListener { copy("Senha", if (reservation != null) networkPassword else "") }
         add(hero, copies, 14)
+        qrHelp = label("Inicie o hotspot para gerar o QR Code real da rede.", 13f, muted)
+        add(hero, qrHelp, 18)
+        qrView = ImageView(this).apply {
+            contentDescription = "QR Code para conectar ao Wi-Fi"
+            setBackgroundColor(Color.WHITE)
+            visibility = View.GONE
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        hero.addView(qrView, LinearLayout.LayoutParams(dp(240), dp(240)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(12)
+        })
+        add(hero, label("Nome e senha do hotspot são definidos pelo Android neste dispositivo. O QR é atualizado quando a rede muda.", 12f, muted), 10)
+
         add(hero, label("ⓘ Rede local isolada • Não compartilha internet", 12f, muted), 16)
         primary = action("▶  INICIAR PORTAL", Color.rgb(19, 125, 232), Color.rgb(76, 60, 236))
         add(hero, primary, 18)
@@ -224,6 +241,51 @@ class MainActivity : Activity() {
         add(info, label("Este modo permite apenas páginas hospedadas pelo aplicativo. Lista de sites externos e controle de internet exigem outro modo de rede.", 13f, muted), 10)
         add(info, label("A quantidade de dispositivos conectados não está disponível nesta API.", 12f, muted), 10)
         add(root, info, 14)
+        val landing = card()
+        add(landing, label("🏠  PÁGINA DE BOAS-VINDAS", 17f, Color.WHITE, true))
+        val titleEntry = EditText(this).apply {
+            setSingleLine(true)
+            setText(portalSettings.title)
+            setTextColor(Color.WHITE)
+            setHintTextColor(muted)
+            hint = "Título da página local"
+        }
+        add(landing, titleEntry, 10)
+        val saveLanding = action("Salvar página padrão", Color.rgb(26, 106, 151), Color.rgb(68, 52, 144))
+        add(landing, saveLanding, 8)
+        saveLanding.setOnClickListener {
+            val title = titleEntry.text.toString().trim()
+            if (title.isBlank()) { titleEntry.error = "Informe um título"; return@setOnClickListener }
+            portalSettings.title = title
+            Toast.makeText(this, "Página local atualizada", Toast.LENGTH_SHORT).show()
+        }
+        add(landing, label("A página será exibida ao visitar o servidor HTTP. Abertura automática ao conectar depende de infraestrutura de portal cativo e não está disponível no hotspot local.", 12f, muted), 10)
+        add(root, landing, 14)
+
+        val allow = card()
+        add(allow, label("🌐  SITES DESEJADOS", 17f, Color.WHITE, true))
+        add(allow, label("Lista salva para um futuro modo gateway. A rede local atual não fornece internet; estes domínios ainda não serão acessíveis.", 12f, muted), 8)
+        sitesList = column()
+        add(allow, sitesList, 12)
+        val siteEntry = EditText(this).apply {
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            hint = "exemplo.com.br"
+            setTextColor(Color.WHITE)
+            setHintTextColor(muted)
+        }
+        add(allow, siteEntry, 6)
+        val addSite = action("+ Adicionar domínio", Color.rgb(29, 101, 132), Color.rgb(66, 54, 146))
+        add(allow, addSite, 6)
+        addSite.setOnClickListener {
+            if (portalSettings.addSite(siteEntry.text.toString())) {
+                siteEntry.text.clear()
+                showSites()
+            } else siteEntry.error = "Informe um domínio válido"
+        }
+        showSites()
+        add(root, allow, 14)
+
 
         val tools = card()
         add(tools, label("⚙  APLICATIVO", 16f, Color.WHITE, true))
@@ -231,6 +293,37 @@ class MainActivity : Activity() {
         add(tools, update, 12)
         update.setOnClickListener { checkUpdate(update) }
         add(root, tools, 14)
+    }
+
+    private fun refreshQr() {
+        if (reservation == null || networkName == "Aguardando inicialização" ||
+            networkPassword.length < 8 || networkPassword == "Consulte as configurações") {
+            qrView.visibility = View.GONE
+            qrHelp.text = "Inicie a rede para visualizar o QR Code de conexão."
+            return
+        }
+        try {
+            qrView.setImageBitmap(WifiQr.bitmap(networkName, networkPassword))
+            qrView.visibility = View.VISIBLE
+            qrHelp.text = "Aponte a câmera de outro dispositivo para conectar"
+        } catch (_: Exception) {
+            qrView.visibility = View.GONE
+            qrHelp.text = "Não foi possível gerar o QR Code desta rede."
+        }
+    }
+
+    private fun showSites() {
+        sitesList.removeAllViews()
+        val sites = portalSettings.sites()
+        if (sites.isEmpty()) add(sitesList, label("Nenhum domínio cadastrado", 13f, muted))
+        for (site in sites) {
+            val line = row()
+            line.addView(label("•  $site", 14f, Color.WHITE), LinearLayout.LayoutParams(0, dp(48), 1f))
+            val remove = action("Remover", Color.rgb(107, 40, 78), Color.rgb(73, 37, 72))
+            line.addView(remove, LinearLayout.LayoutParams(dp(105), dp(48)))
+            remove.setOnClickListener { portalSettings.removeSite(site); showSites() }
+            add(sitesList, line, 4)
+        }
     }
 
     private fun copy(name: String, value: String) {
@@ -279,8 +372,9 @@ class MainActivity : Activity() {
                     networkPassword = r.wifiConfiguration?.preSharedKey ?: "Consulte as configurações"
                     ssidView.text = "Rede: $networkName"
                     passwordView.text = "Senha: $networkPassword"
+                    refreshQr()
                     startedAt = System.currentTimeMillis()
-                    server = LocalServer { _ ->
+                    server = LocalServer({ portalSettings.title }) { _ ->
                         runOnUiThread { visits++; counterView.text = visits.toString() }
                     }.apply {
                         bytesPerSecond = kbps * 1024
@@ -313,6 +407,10 @@ class MainActivity : Activity() {
             setState("ERRO AO INICIAR", e.localizedMessage ?: "Tente novamente", false)
         }
     }
+    private fun refreshQrOff() {
+        qrView.visibility = View.GONE
+        qrHelp.text = "QR Code disponível quando a rede estiver ativa"
+    }
     private fun shutdown() {
         val oldServer = server
         server = null
@@ -321,6 +419,7 @@ class MainActivity : Activity() {
         reservation = null
         oldReservation?.close()
         startedAt = 0L
+        if (::qrView.isInitialized) refreshQrOff()
         networkName = "Aguardando inicialização"
         networkPassword = "••••••••"
         if (::ssidView.isInitialized) ssidView.text = "Rede: $networkName"
