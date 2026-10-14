@@ -13,9 +13,10 @@ android {
         buildConfigField("String", "RELEASES_API_URL", "\"https://api.github.com/repos/AmaroPSJunior/WiFi-Captive-Portal/releases/latest\"")
     }
     buildFeatures { buildConfig = true }
+    val signingPath = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
     signingConfigs {
         create("ciRelease") {
-            System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let {
+            signingPath?.let {
                 storeFile = file(it)
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
@@ -26,7 +27,7 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("ciRelease")
+            if (signingPath != null) signingConfig = signingConfigs.getByName("ciRelease")
         }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
