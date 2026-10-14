@@ -17,7 +17,6 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.net.wifi.SoftApConfiguration
-import android.net.wifi.WifiSsid
 import java.util.concurrent.Executor
 import android.os.Build
 import android.os.Bundle
@@ -306,7 +305,7 @@ class MainActivity : Activity() {
     private fun supportsCustomLocalHotspot(): Boolean = try {
         Build.VERSION.SDK_INT >= 36 &&
             android.net.wifi.SoftApConfiguration.Builder::class.java.getMethod(
-                "setWifiSsid", WifiSsid::class.java
+                "setSsid", String::class.java
             ) != null &&
             android.net.wifi.SoftApConfiguration.Builder::class.java.getMethod(
                 "setPassphrase", String::class.java, Integer.TYPE
@@ -479,8 +478,7 @@ class MainActivity : Activity() {
                 val ssid = prefs.getString("custom_ssid", null) ?: ""
                 val password = prefs.getString("custom_pass", null) ?: ""
                 val configBuilder = SoftApConfiguration.Builder()
-                val wifiSsid = WifiSsid::class.java.getMethod("fromUtf8Text", String::class.java).invoke(null, ssid) as WifiSsid
-                configBuilder.javaClass.getMethod("setWifiSsid", WifiSsid::class.java).invoke(configBuilder, wifiSsid)
+                configBuilder.setSsid(ssid)
                 configBuilder.javaClass.getMethod("setPassphrase", String::class.java, Integer.TYPE)
                     .invoke(configBuilder, password, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
                 val config = configBuilder.build()
