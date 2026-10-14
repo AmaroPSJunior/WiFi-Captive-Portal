@@ -39,7 +39,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   publish:
-    name: Publicar release após CI verde
+    name: Publicar APK assinado
     needs: verify
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -47,18 +47,69 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Verificar segredos da assinatura
+        id: signing
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$KEYSTORE_B64" && -n "$STORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release não publicada: configure os quatro Secrets de assinatura descritos em RELEASE.md."
+          fi
+      - uses: actions/setup-java@v4
+        if: steps.signing.outputs.ready == 'true'
         with:
-          name: wifi-portal-apk-${{ github.run_number }}
-          path: dist
-      - name: Preparar pacote e verificação
+          distribution: temurin
+          java-version: '17'
+      - name: Preparar Android SDK
+        if: steps.signing.outputs.ready == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/app-debug.apk
-          mv dist/app-debug.apk "WiFi-Captive-Portal-v0.1.${GITHUB_RUN_NUMBER}-preview.apk"
+          SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --install 'platforms;android-36' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          gradle-version: '8.11.1'
+      - name: Restaurar chave privada
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/portal-release.jks"
+          test -s "$RUNNER_TEMP/portal-release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/portal-release.jks" >> "$GITHUB_ENV"
+      - name: Compilar release assinada
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Verificar assinatura e hash
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          cp "$APK" "WiFi-Captive-Portal-v0.1.${GITHUB_RUN_NUMBER}.apk"
           sha256sum WiFi-Captive-Portal-*.apk > SHA256SUMS.txt
-      - name: Publicar automaticamente no GitHub Releases
+      - name: Publicar release somente após verificação
+        if: steps.signing.outputs.ready == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,6 +118,5 @@ jobs:
           TAG="v0.1.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" WiFi-Captive-Portal-*.apk SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "Wi-Fi Captive Portal $TAG (prévia)" \
-            --notes "Prévia Android gerada após testes unitários, lint e compilação aprovados. APK debug: a assinatura pode variar entre execuções; atualizações instaladas sobre versões anteriores não são garantidas. Instalação exige confirmação do Android. Sem controle de tráfego externo nem portal cativo automático." \
-            --prerelease
+            --title "Wi-Fi Captive Portal $TAG" \
+            --notes "APK de release assinado com chave permanente; testes, lint, compilação e verificação da assinatura concluídos. Atualizar mantém os dados apenas se a versão previamente instalada tiver a mesma chave; a instalação exige confirmação do Android."
