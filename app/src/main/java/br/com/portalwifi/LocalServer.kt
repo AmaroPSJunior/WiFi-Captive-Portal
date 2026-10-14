@@ -70,7 +70,7 @@ class LocalServer(private val titleProvider: () -> String, private val onVisit: 
     }
     private fun landingPage(title: String): String {
         val safe = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            .replace("\\"", "&quot;").replace("'", "&#39;")
+            .replace("\"", "&quot;").replace("'", "&#39;")
         return """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
             <meta name="viewport" content="width=device-width,initial-scale=1">
             <title>Portal Wi-Fi</title><style>
