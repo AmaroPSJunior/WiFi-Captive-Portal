@@ -9,7 +9,7 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = (System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: buildNumber).coerceAtLeast(1)
-        versionName = tag?.removePrefix("v") ?: "0.1.0-dev.$buildNumber"
+        versionName = tag?.removePrefix("v") ?: if (System.getenv("GITHUB_RUN_NUMBER") != null) "0.1.$buildNumber" else "0.1.0-dev.$buildNumber"
         buildConfigField("String", "RELEASES_API_URL", "\"https://api.github.com/repos/AmaroPSJunior/WiFi-Captive-Portal/releases/latest\"")
     }
     buildFeatures { buildConfig = true }
