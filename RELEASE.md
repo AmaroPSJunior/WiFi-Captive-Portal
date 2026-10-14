@@ -1,10 +1,12 @@
-# Build, versões e releases
+# Distribuição automática
 
-- Push em main e pull requests executam testes unitários, lint e compilação debug no GitHub Actions.
-- O APK debug aparece como artefato da execução, não como release.
-- Uma tag no formato `vX.Y.Z` executa pipeline e, após verificar testes, publica APK assinado em GitHub Releases.
-- Segredos necessários no repositório: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
-- Use a **mesma chave** em todas as versões para permitir atualização mantendo os dados. Nunca versione a chave privada.
-- `versionCode` usa `GITHUB_RUN_NUMBER` (ou `APP_VERSION_CODE`) e precisa ser crescente entre builds instaláveis.
-- A verificação de atualizações consulta a última release pública. Se o repositório for privado, o aplicativo precisará de uma estratégia autenticada de atualização; não inclua tokens GitHub no APK.
-- Atualização é download + instalação confirmada pelo usuário; instalação silenciosa não é suportada.
+A cada push/merge na branch `main`, o workflow roda testes unitários, Android Lint e build. **Somente após tudo passar** ele cria automaticamente uma prévia em GitHub Releases com APK e SHA256SUMS. Pull requests apenas validam, sem publicar.
+
+A primeira publicação usa o próximo número de execução, com versão `v0.1.<GITHUB_RUN_NUMBER>`. Nenhuma tag precisa ser criada manualmente.
+
+## Limitações importantes
+
+- O APK publicado agora é **debug/prévia**, porque não há chave de assinatura estável configurada. O certificado debug da máquina CI pode mudar: instalar por cima de outra versão pode falhar. Para atualização confiável, é obrigatório assinar todas as versões com a mesma chave.
+- As prévias aparecem em Releases, mas a API `/releases/latest` do GitHub não retorna pré-releases; o botão de atualização no app não as detectará.
+- Para o canal estável, configurar `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, alterar o pipeline para build release assinado e publicar sem `--prerelease`.
+- Nunca publique uma chave de assinatura no repositório. Instalação silenciosa não é suportada.
