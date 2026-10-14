@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.os.Build
 import android.text.InputType
 import android.view.ViewGroup
 import android.widget.*
@@ -66,8 +67,11 @@ class MainActivity : Activity() {
             }
         }
         start.setOnClickListener {
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),100)
+            val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (Build.VERSION.SDK_INT >= 33) permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+            val missing = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            if (missing.isNotEmpty()) {
+                requestPermissions(missing.toTypedArray(),100)
             } else {
                 val kb = speed.text.toString().toIntOrNull()?.coerceIn(1,10000) ?: 128
                 val mins = minutes.text.toString().toIntOrNull()?.coerceIn(1,1440) ?: 30
