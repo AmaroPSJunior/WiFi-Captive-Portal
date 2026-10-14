@@ -67,7 +67,7 @@ class MainActivity : Activity() {
         }
         start.setOnClickListener {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),100)
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),100)
             } else {
                 val kb = speed.text.toString().toIntOrNull()?.coerceIn(1,10000) ?: 128
                 val mins = minutes.text.toString().toIntOrNull()?.coerceIn(1,1440) ?: 30
