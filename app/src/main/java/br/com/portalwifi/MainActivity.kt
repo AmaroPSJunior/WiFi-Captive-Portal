@@ -43,7 +43,7 @@ class MainActivity : Activity() {
     private var downloadId: Long? = null
     private var downloadedUri: Uri? = null
     private var downloadButton: Button? = null
-    private val downloadPoller = Handler(mainLooper)
+    private val downloadPoller by lazy(LazyThreadSafetyMode.NONE) { Handler(mainLooper) }
     private var latestVersion: String? = null
     private val downloadCheck = object : Runnable { override fun run() { pollDownload() } }
     private var startedAt = 0L
@@ -51,7 +51,7 @@ class MainActivity : Activity() {
     private var networkName = "Aguardando inicialização"
     private var networkPassword = "••••••••"
     private val prefs by lazy { getSharedPreferences("portal", MODE_PRIVATE) }
-    private val ticker = Handler(mainLooper)
+    private val ticker by lazy(LazyThreadSafetyMode.NONE) { Handler(mainLooper) }
     private lateinit var stateLabel: TextView
     private lateinit var subLabel: TextView
     private lateinit var ssidView: TextView
