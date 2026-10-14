@@ -19,10 +19,10 @@ Converta o arquivo para Base64 **sem quebras de linha**:
 
 Abra [Secrets do repositório](https://github.com/AmaroPSJunior/WiFi-Captive-Portal/settings/secrets/actions) e cadastre somente:
 
-1. `ANDROID_KEYSTORE_BASE64` — texto Base64 completo do arquivo `.jks`.
-2. `ANDROID_KEYSTORE_PASSWORD` — senha escolhida para o keystore e a chave privada.
+1. `WIFI_PORTAL_KEYSTORE` — texto Base64 completo do arquivo `.jks`.
+2. `WIFI_PORTAL_PASSWORD` — senha escolhida para o keystore e a chave privada.
 
-O alias `portal` está fixado no Gradle; a senha da chave privada é reutilizada a partir de `ANDROID_KEYSTORE_PASSWORD`. **Não publique o keystore ou senhas no GitHub, Issues, logs ou chat.** É possível manter os dois Secrets antigos de alias e senha da chave cadastrados sem uso, mas eles não são mais necessários.
+O alias `portal` está fixado no Gradle; a senha da chave privada é reutilizada a partir de `WIFI_PORTAL_PASSWORD`. **Não publique o keystore ou senhas no GitHub, Issues, logs ou chat.** É possível manter os dois Secrets antigos de alias e senha da chave cadastrados sem uso, mas eles não são mais necessários.
 
 ## Primeira instalação e atualizações
 
