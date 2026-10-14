@@ -87,6 +87,11 @@ class MainActivity : Activity() {
         if (reservation != null) return
         val manager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         status.text = "Iniciando rede Wi-Fi local..."
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+            (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED)) {
+            status.text = "Permissões de Wi-Fi e localização necessárias"
+            return
+        }
         try {
             manager.startLocalOnlyHotspot(object:WifiManager.LocalOnlyHotspotCallback() {
                 override fun onStarted(r:WifiManager.LocalOnlyHotspotReservation) {
