@@ -3,7 +3,7 @@ val tag = System.getenv("GITHUB_REF_NAME")?.takeIf { it.matches(Regex("v[0-9]+\\
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 android {
     namespace = "br.com.portalwifi"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "br.com.portalwifi"
         minSdk = 29
