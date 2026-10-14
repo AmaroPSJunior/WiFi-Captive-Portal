@@ -51,8 +51,8 @@ jobs:
         id: signing
         shell: bash
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.WIFI_PORTAL_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.WIFI_PORTAL_PASSWORD }}
         run: |
           if [[ -n "$KEYSTORE_B64" && -n "$STORE_PASSWORD" ]]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -81,7 +81,7 @@ jobs:
         if: steps.signing.outputs.ready == 'true'
         shell: bash
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_B64: ${{ secrets.WIFI_PORTAL_KEYSTORE }}
         run: |
           set -euo pipefail
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/portal-release.jks"
@@ -90,7 +90,7 @@ jobs:
       - name: Compilar release assinada
         if: steps.signing.outputs.ready == 'true'
         env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.WIFI_PORTAL_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
       - name: Verificar assinatura e hash
         if: steps.signing.outputs.ready == 'true'
