@@ -86,6 +86,8 @@ jobs:
           set -euo pipefail
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/portal-release.jks"
           test -s "$RUNNER_TEMP/portal-release.jks"
+          echo "SHA256 do arquivo de assinatura recebido (não é a chave privada):"
+          sha256sum "$RUNNER_TEMP/portal-release.jks" | cut -d " " -f 1
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/portal-release.jks" >> "$GITHUB_ENV"
       - name: Diagnosticar credenciais de assinatura sem expor segredos
         if: steps.signing.outputs.ready == 'true'
@@ -94,8 +96,12 @@ jobs:
           STORE_PASSWORD: ${{ secrets.WIFI_PORTAL_PASSWORD }}
         run: |
           set -euo pipefail
+          if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype PKCS12 -storepass:env STORE_PASSWORD >/dev/null 2>&1; then
+            echo "::error::O arquivo recebido não abre com WIFI_PORTAL_PASSWORD. Compare o SHA256 exibido no passo anterior com sha256sum ~/wifi-portal-signing/portal-release.jks no Termux. Se iguais, revise a senha; se diferentes, o Base64 cadastrado não é deste arquivo."
+            exit 1
+          fi
           if ! keytool -list -keystore "$ANDROID_KEYSTORE_PATH" -storetype PKCS12 -storepass:env STORE_PASSWORD -alias portal >/dev/null 2>&1; then
-            echo "::error::A senha WIFI_PORTAL_PASSWORD não abre o arquivo recebido em WIFI_PORTAL_KEYSTORE, ou o alias portal não existe. Confira que ambos foram gerados do mesmo arquivo e senha."
+            echo "::error::O keystore abre, mas o alias portal não foi encontrado."
             exit 1
           fi
           # Checa também a senha da chave privada, não apenas a senha do contêiner.
