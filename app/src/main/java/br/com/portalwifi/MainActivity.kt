@@ -299,8 +299,56 @@ class MainActivity : Activity() {
         add(tools, label("⚙  APLICATIVO", 16f, Color.WHITE, true))
         val update = action("↻  Verificar atualizações", Color.rgb(49, 77, 133), Color.rgb(67, 51, 130))
         add(tools, update, 12)
+        val diagnostic = action("◉  Diagnóstico do hotspot", Color.rgb(30, 98, 120), Color.rgb(62, 52, 120))
+        add(tools, diagnostic, 10)
+        diagnostic.setOnClickListener { showNetworkDiagnosis() }
         update.setOnClickListener { checkUpdate(update) }
         add(root, tools, 14)
+    }
+
+    /**
+     * Diagnóstico somente leitura. Não ativa tethering, não altera firewall ou Wi-Fi.
+     * Permissões privilegiadas e regras de tráfego precisam de confirmação externa via ADB.
+     */
+    private fun showNetworkDiagnosis() {
+        val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val active = connectivity.activeNetwork
+        val caps = connectivity.getNetworkCapabilities(active)
+        val wifi = getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val permissionNames = listOf(
+            "android.permission.TETHER_PRIVILEGED",
+            "android.permission.NETWORK_SETTINGS",
+            "android.permission.NETWORK_STACK",
+            "android.permission.CONNECTIVITY_INTERNAL",
+            Manifest.permission.CHANGE_WIFI_STATE,
+            Manifest.permission.ACCESS_WIFI_STATE
+        )
+        val report = buildString {
+            appendLine("DIAGNÓSTICO SOMENTE LEITURA — Wi-Fi Captive Portal")
+            appendLine("Android API: ${Build.VERSION.SDK_INT}")
+            appendLine("Fabricante: ${Build.MANUFACTURER}; Modelo: ${Build.MODEL}")
+            appendLine("Aplicativo: ${BuildConfig.VERSION_NAME}")
+            appendLine("Hotspot local do app: ${if (reservation != null) "ativo" else "inativo"}")
+            appendLine("Wi-Fi do aparelho: ${if (wifi.isWifiEnabled) "ativado" else "desativado"}")
+            appendLine("Rede padrão com internet validada: ${caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true}")
+            appendLine("Rede padrão por celular: ${caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}")
+            appendLine("Rede padrão por Wi-Fi: ${caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true}")
+            appendLine("Permissões do aplicativo:")
+            for (name in permissionNames) {
+                val granted = packageManager.checkPermission(name, packageName) == PackageManager.PERMISSION_GRANTED
+                appendLine("  $name: ${if (granted) "concedida" else "não concedida"}")
+            }
+            appendLine("Modo atual: LocalOnlyHotspot, SEM tethering de internet.")
+            appendLine("Filtragem do tráfego dos clientes: NÃO implementada.")
+            appendLine("Este relatório NÃO comprova que ADB ou firewall estão disponíveis.")
+            appendLine("Próximo teste: consultar shell/iptables/nft no próprio Xiaomi via ADB; sem alterar regras.")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Diagnóstico do Xiaomi")
+            .setMessage(report)
+            .setPositiveButton("Copiar relatório") { _, _ -> copy("Diagnóstico do hotspot", report) }
+            .setNegativeButton("Fechar", null)
+            .show()
     }
 
     private fun supportsCustomLocalHotspot(): Boolean = try {
