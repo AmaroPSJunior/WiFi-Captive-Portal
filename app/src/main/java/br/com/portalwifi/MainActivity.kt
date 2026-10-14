@@ -7,6 +7,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.app.DownloadManager
+import android.os.Environment
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -37,6 +40,12 @@ class MainActivity : Activity() {
     private var reservation: WifiManager.LocalOnlyHotspotReservation? = null
     private var server: LocalServer? = null
     private var visits = 0
+    private var downloadId: Long? = null
+    private var downloadedUri: Uri? = null
+    private var downloadButton: Button? = null
+    private val downloadPoller = Handler(mainLooper)
+    private var latestVersion: String? = null
+    private val downloadCheck = object : Runnable { override fun run() { pollDownload() } }
     private var startedAt = 0L
     private var busy = false
     private var networkName = "Aguardando inicialização"
@@ -319,23 +328,140 @@ class MainActivity : Activity() {
     }
     private fun checkUpdate(button: Button) {
         button.isEnabled = false
+        button.text = "Buscando atualização..."
         UpdateChecker.checkAsync(BuildConfig.RELEASES_API_URL, BuildConfig.VERSION_NAME) { result ->
             runOnUiThread {
                 button.isEnabled = true
+                button.text = "↻  Verificar atualizações"
                 when (result) {
                     is UpdateChecker.Result.NewVersion -> AlertDialog.Builder(this)
-                        .setTitle("Versão ${result.version} disponível")
-                        .setMessage("O APK será aberto no navegador. A instalação depende da confirmação do Android.")
-                        .setPositiveButton("Baixar") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.url))) }
+                        .setTitle("Atualização ${result.version} disponível")
+                        .setMessage("Deseja baixar o APK agora? Após o download, o Android solicitará confirmação para instalar. Se esta versão estiver assinada com outra chave, pode ser necessário desinstalar a anterior.")
+                        .setPositiveButton("Baixar APK") { _, _ -> downloadApk(result.version, result.url, button) }
                         .setNegativeButton("Agora não", null).show()
-                    UpdateChecker.Result.UpToDate -> Toast.makeText(this, "Nenhuma atualização estável disponível", Toast.LENGTH_LONG).show()
-                    is UpdateChecker.Result.Error -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    UpdateChecker.Result.UpToDate -> Toast.makeText(this, "Você já possui a versão mais recente", Toast.LENGTH_LONG).show()
+                    is UpdateChecker.Result.Error -> AlertDialog.Builder(this)
+                        .setTitle("Falha ao verificar atualização")
+                        .setMessage(result.message)
+                        .setPositiveButton("OK", null).show()
                 }
             }
         }
     }
+
+    private fun downloadApk(version: String, url: String, button: Button) {
+        if (downloadId != null) {
+            Toast.makeText(this, "Download em andamento", Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            val target = Uri.parse(url)
+            if (target.scheme != "https" || target.host != "github.com") {
+                Toast.makeText(this, "Endereço de atualização inválido", Toast.LENGTH_LONG).show()
+                return
+            }
+            val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            val fileName = "WiFi-Captive-Portal-$version.apk"
+            val request = DownloadManager.Request(target)
+                .setTitle("Wi-Fi Captive Portal $version")
+                .setDescription("Baixando atualização do aplicativo")
+                .setMimeType("application/vnd.android.package-archive")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            downloadId = manager.enqueue(request)
+            latestVersion = version
+            downloadButton = button
+            button.text = "Baixando atualização..."
+            button.isEnabled = false
+            downloadPoller.postDelayed(downloadCheck, 1000)
+            Toast.makeText(this, "Download iniciado", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            downloadId = null
+            button.isEnabled = true
+            button.text = "↻  Verificar atualizações"
+            AlertDialog.Builder(this).setTitle("Falha ao baixar APK")
+                .setMessage(e.localizedMessage ?: "Tente novamente")
+                .setPositiveButton("OK", null).show()
+        }
+    }
+
+    private fun pollDownload() {
+        val id = downloadId ?: return
+        val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+        try {
+            manager.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
+                if (!cursor.moveToFirst()) {
+                    finishDownload("Download não encontrado")
+                    return
+                }
+                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    val uri = manager.getUriForDownloadedFile(id)
+                    finishDownload(null)
+                    if (uri != null) {
+                        downloadedUri = uri
+                        promptInstall(uri)
+                    } else {
+                        Toast.makeText(this, "APK baixado, abra a pasta Downloads", Toast.LENGTH_LONG).show()
+                    }
+                } else if (status == DownloadManager.STATUS_FAILED) {
+                    val errorCode = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                    finishDownload("Download falhou (código $errorCode)")
+                } else {
+                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val done = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    if (total > 0) {
+                        val percent = (done * 100 / total).coerceIn(0, 100)
+                        downloadButton?.text = "Baixando... $percent%"
+                    }
+                    downloadPoller.postDelayed(downloadCheck, 1000)
+                }
+            }
+        } catch (e: Exception) {
+            finishDownload(e.localizedMessage ?: "Falha ao consultar download")
+        }
+    }
+
+    private fun finishDownload(error: String?) {
+        downloadPoller.removeCallbacks(downloadCheck)
+        downloadId = null
+        downloadButton?.isEnabled = true
+        downloadButton?.text = if (error == null) "✓  Instalar APK baixado" else "↻  Verificar atualizações"
+        if (error == null) downloadButton?.setOnClickListener {
+            downloadedUri?.let { uri -> promptInstall(uri) } ?: Toast.makeText(this, "APK não encontrado", Toast.LENGTH_LONG).show()
+        }
+        if (error != null) AlertDialog.Builder(this).setTitle("Download interrompido")
+            .setMessage(error).setPositiveButton("OK", null).show()
+    }
+
+    private fun promptInstall(uri: Uri) {
+        if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+            AlertDialog.Builder(this)
+                .setTitle("Permitir instalação")
+                .setMessage("Autorize instalações de aplicativos desta origem e volte para tocar em 'Instalar APK baixado'.")
+                .setPositiveButton("Abrir configurações") { _, _ ->
+                    startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName")))
+                }
+                .setNegativeButton("Cancelar", null).show()
+            return
+        }
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            AlertDialog.Builder(this).setTitle("Não foi possível abrir o instalador")
+                .setMessage("Abra o APK na pasta Downloads para concluir a instalação. ${e.localizedMessage ?: ""}")
+                .setPositiveButton("OK", null).show()
+        }
+    }
+
     override fun onDestroy() {
         ticker.removeCallbacks(tick)
+        downloadPoller.removeCallbacks(downloadCheck)
         shutdown()
         super.onDestroy()
     }
