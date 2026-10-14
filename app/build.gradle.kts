@@ -7,7 +7,7 @@ android {
     defaultConfig {
         applicationId = "br.com.portalwifi"
         minSdk = 29
-        targetSdk = 32
+        targetSdk = 35
         versionCode = (System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: buildNumber).coerceAtLeast(1)
         versionName = tag?.removePrefix("v") ?: "0.1.0-dev.$buildNumber"
         buildConfigField("String", "RELEASES_API_URL", "\"https://api.github.com/repos/AmaroPSJunior/WiFi-Captive-Portal/releases/latest\"")
