@@ -7,7 +7,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 /** Limites apenas para HTTP local; não atua sobre todo o tráfego Wi-Fi. */
-class LocalServer(private val onVisit: (String) -> Unit) {
+class LocalServer(private val titleProvider: () -> String, private val onVisit: (String) -> Unit) {
     private val running = AtomicBoolean(false)
     private val executor = Executors.newCachedThreadPool()
     private var listener: ServerSocket? = null
@@ -48,7 +48,7 @@ class LocalServer(private val onVisit: (String) -> Unit) {
                     expired -> "<h1>Sessão encerrada</h1>"
                     !permitted -> "<h1>Página não disponível</h1>"
                     path == "/health" -> "OK"
-                    else -> "<!doctype html><html lang='pt-br'><meta name='viewport' content='width=device-width,initial-scale=1'><meta charset='utf-8'><title>Portal Wi-Fi</title><style>body{font:18px system-ui;background:#111827;color:white;padding:32px}main{max-width:540px;margin:auto;padding:24px;border-radius:16px;background:#253348}</style><main><h1>Bem-vindo!</h1><p>Seu acesso ao portal local está ativo.</p><small>Esta rede não oferece internet.</small></main></html>"
+                    else -> landingPage(titleProvider())
                 }
                 val bytes = body.toByteArray(Charsets.UTF_8)
                 val header = "HTTP/1.1 $code OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
@@ -67,6 +67,21 @@ class LocalServer(private val onVisit: (String) -> Unit) {
                 out.flush()
             } catch (_: Exception) {}
         }
+    }
+    private fun landingPage(title: String): String {
+        val safe = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace("\\"", "&quot;").replace("'", "&#39;")
+        return """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>Portal Wi-Fi</title><style>
+            body{margin:0;background:#070e21;color:white;font:18px system-ui;padding:24px}
+            main{max-width:540px;margin:8vh auto;padding:32px;border:1px solid #246383;
+            border-radius:24px;background:linear-gradient(130deg,#093c44,#1c1b50)}
+            h1{color:#5ff0c7}p{line-height:1.5}small{color:#b5c5d8}
+            </style></head><body><main><h1>$safe</h1>
+            <p>Você está conectado à rede local.</p>
+            <small>Este hotspot não fornece acesso à internet. Abra este endereço manualmente no navegador.</small>
+            </main></body></html>"""
     }
     private fun readLine(input: BufferedInputStream): String? {
         val s = StringBuilder()
