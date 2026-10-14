@@ -368,8 +368,9 @@ class MainActivity : Activity() {
             manager.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
                 override fun onStarted(r: WifiManager.LocalOnlyHotspotReservation) {
                     reservation = r
-                    networkName = r.wifiConfiguration?.SSID ?: "Rede do Android"
-                    networkPassword = r.wifiConfiguration?.preSharedKey ?: "Consulte as configurações"
+                    val config = if (Build.VERSION.SDK_INT >= 30) r.softApConfiguration else null
+                    networkName = (config?.ssid ?: r.wifiConfiguration?.SSID ?: "Rede do Android").trim('"')
+                    networkPassword = config?.passphrase ?: r.wifiConfiguration?.preSharedKey ?: "Consulte as configurações"
                     ssidView.text = "Rede: $networkName"
                     passwordView.text = "Senha: $networkPassword"
                     refreshQr()
