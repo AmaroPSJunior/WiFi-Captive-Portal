@@ -16,6 +16,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.net.wifi.SoftApConfiguration
+import android.net.wifi.WifiSsid
+import java.util.concurrent.Executor
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -50,6 +53,7 @@ class MainActivity : Activity() {
     private var busy = false
     private var networkName = "Aguardando inicialização"
     private var networkPassword = "••••••••"
+    private var customNetworkRequested = false
     private val prefs by lazy { getSharedPreferences("portal", MODE_PRIVATE) }
     private val ticker by lazy(LazyThreadSafetyMode.NONE) { Handler(mainLooper) }
     private lateinit var stateLabel: TextView
@@ -84,6 +88,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = 0
         kbps = prefs.getInt("kbps", 128)
         minutes = prefs.getInt("minutes", 30)
+        customNetworkRequested = prefs.contains("custom_ssid") && supportsCustomLocalHotspot()
         render()
         ticker.post(tick)
     }
@@ -174,7 +179,10 @@ class MainActivity : Activity() {
         hero.addView(qrView, LinearLayout.LayoutParams(dp(240), dp(240)).apply {
             gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(12)
         })
-        add(hero, label("Nome e senha do hotspot são definidos pelo Android neste dispositivo. O QR é atualizado quando a rede muda.", 12f, muted), 10)
+        add(hero, label("O QR Code usa sempre as credenciais confirmadas pelo Android.", 12f, muted), 10)
+        val editNetwork = action("✎  Editar nome e senha do Wi-Fi", Color.rgb(42, 77, 121), Color.rgb(64, 47, 117))
+        add(hero, editNetwork, 10)
+        editNetwork.setOnClickListener { editWifiConfiguration() }
 
         add(hero, label("ⓘ Rede local isolada • Não compartilha internet", 12f, muted), 16)
         primary = action("▶  INICIAR PORTAL", Color.rgb(19, 125, 232), Color.rgb(76, 60, 236))
@@ -295,6 +303,71 @@ class MainActivity : Activity() {
         add(root, tools, 14)
     }
 
+    private fun supportsCustomLocalHotspot(): Boolean = try {
+        Build.VERSION.SDK_INT >= 36 &&
+            android.net.wifi.SoftApConfiguration.Builder::class.java.getMethod(
+                "setWifiSsid", WifiSsid::class.java
+            ) != null &&
+            android.net.wifi.SoftApConfiguration.Builder::class.java.getMethod(
+                "setPassphrase", String::class.java, Integer.TYPE
+            ) != null &&
+            WifiManager::class.java.getMethod(
+                "startLocalOnlyHotspotWithConfiguration",
+                SoftApConfiguration::class.java,
+                Executor::class.java,
+                WifiManager.LocalOnlyHotspotCallback::class.java
+            ) != null
+    } catch (_: Exception) { false }
+
+    private fun editWifiConfiguration() {
+        if (!supportsCustomLocalHotspot()) {
+            AlertDialog.Builder(this).setTitle("Personalização indisponível")
+                .setMessage("Esta versão do Android não expõe a configuração personalizada para hotspot local. Nome e senha são gerados pelo sistema. O QR Code continuará exibindo os dados reais.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val content = column().apply { setPadding(dp(20), dp(12), dp(20), 0) }
+        val name = EditText(this).apply {
+            hint = "Nome da rede (SSID)"
+            setSingleLine(true)
+            setText(prefs.getString("custom_ssid", networkName.takeIf { reservation != null } ?: "MeuPortal"))
+        }
+        val pass = EditText(this).apply {
+            hint = "Senha WPA2 (8 a 63 caracteres)"
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(prefs.getString("custom_pass", ""))
+        }
+        add(content, name)
+        add(content, pass, 8)
+        val dialog = AlertDialog.Builder(this).setTitle("Configuração do Wi-Fi")
+            .setMessage("Ao aplicar, o hotspot será reiniciado. Outros dispositivos precisarão reconectar.")
+            .setView(content)
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Aplicar", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val ssid = name.text.toString().trim()
+                val password = pass.text.toString()
+                if (ssid.isBlank() || ssid.toByteArray(Charsets.UTF_8).size > 32) {
+                    name.error = "SSID deve ter de 1 a 32 bytes UTF-8"
+                    return@setOnClickListener
+                }
+                if (password.length !in 8..63 || password.any { it.code !in 32..126 }) {
+                    pass.error = "Senha deve conter 8–63 caracteres ASCII"
+                    return@setOnClickListener
+                }
+                prefs.edit().putString("custom_ssid", ssid).putString("custom_pass", password).apply()
+                customNetworkRequested = true
+                dialog.dismiss()
+                shutdown()
+                setState("PORTAL DESLIGADO", "Nova configuração salva. Inicie novamente o hotspot.", false)
+                Toast.makeText(this, "Toque em Iniciar Portal para aplicar a nova rede", Toast.LENGTH_LONG).show()
+            }
+        }
+        dialog.show()
+    }
+
     private fun refreshQr() {
         if (reservation == null || networkName == "Aguardando inicialização" ||
             networkPassword.length < 8 || networkPassword == "Consulte as configurações") {
@@ -365,7 +438,7 @@ class MainActivity : Activity() {
         subLabel.text = "Preparando hotspot local seguro"
         val manager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         try {
-            manager.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
+            val callback = object : WifiManager.LocalOnlyHotspotCallback() {
                 override fun onStarted(r: WifiManager.LocalOnlyHotspotReservation) {
                     reservation = r
                     val config = if (Build.VERSION.SDK_INT >= 30) r.softApConfiguration else null
@@ -401,11 +474,27 @@ class MainActivity : Activity() {
                         .setMessage(message + "\n\nTente desligar o compartilhamento de internet nas configurações do aparelho.")
                         .setPositiveButton("Entendi", null).show()
                 }
-            }, Handler(mainLooper))
+            }
+            if (customNetworkRequested && supportsCustomLocalHotspot()) {
+                val ssid = prefs.getString("custom_ssid", null) ?: ""
+                val password = prefs.getString("custom_pass", null) ?: ""
+                val configBuilder = SoftApConfiguration.Builder()
+                val wifiSsid = WifiSsid.fromUtf8Text(ssid)
+                configBuilder.javaClass.getMethod("setWifiSsid", WifiSsid::class.java).invoke(configBuilder, wifiSsid)
+                configBuilder.javaClass.getMethod("setPassphrase", String::class.java, Integer.TYPE)
+                    .invoke(configBuilder, password, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
+                val config = configBuilder.build()
+                manager.javaClass.getMethod("startLocalOnlyHotspotWithConfiguration",
+                    SoftApConfiguration::class.java, Executor::class.java,
+                    WifiManager.LocalOnlyHotspotCallback::class.java)
+                    .invoke(manager, config, mainExecutor, callback)
+            } else {
+                manager.startLocalOnlyHotspot(callback, Handler(mainLooper))
+            }
         } catch (e: SecurityException) {
             setState("PERMISSÃO NECESSÁRIA", "Conceda as permissões de Wi-Fi nas configurações", false)
         } catch (e: Exception) {
-            setState("ERRO AO INICIAR", e.localizedMessage ?: "Tente novamente", false)
+            setState("ERRO AO INICIAR", e.localizedMessage ?: "Tente iniciar sem personalização ou consulte as configurações de Wi-Fi.", false)
         }
     }
     private fun refreshQrOff() {
