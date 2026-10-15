@@ -10,6 +10,7 @@ import kotlin.concurrent.thread
 object UpdateChecker {
     sealed interface Result {
         data class NewVersion(val version: String, val url: String): Result
+        data class BuildAvailable(val version: String, val url: String): Result
         data object UpToDate: Result
         data class Error(val message: String): Result
     }
@@ -54,11 +55,48 @@ object UpdateChecker {
                         }.thenBy {
                             it.first.split(".").getOrNull(2)?.toIntOrNull() ?: 0
                         })
-                        if (best == null) Result.UpToDate else Result.NewVersion(best.first, best.second)
+                        if (best == null) latestSuccessfulBuild(installed) ?: Result.UpToDate else Result.NewVersion(best.first, best.second)
                     }
                 } finally { con.disconnect() }
             } catch (e: Exception) { Result.Error(e.localizedMessage ?: "Verifique sua conexão com a internet") }
             callback(result)
         }
     }
+    /**
+     * Artifacts are temporary workflow outputs, not signed releases.
+     * Never offer an artifact URL to DownloadManager as an APK.
+     */
+    private fun latestSuccessfulBuild(installed: String): Result? {
+        val url = "https://api.github.com/repos/AmaroPSJunior/WiFi-Captive-Portal/actions/workflows/android.yml/runs?per_page=30"
+        val con = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10000
+            readTimeout = 10000
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("User-Agent", "WiFi-Captive-Portal")
+        }
+        return try {
+            if (con.responseCode != 200) return null
+            val runs = JSONObject(con.inputStream.bufferedReader().use { it.readText() })
+                .optJSONArray("workflow_runs") ?: return null
+            var bestVersion: String? = null
+            var bestUrl: String? = null
+            for (index in 0 until runs.length()) {
+                val run = runs.optJSONObject(index) ?: continue
+                if (run.optString("conclusion") != "success") continue
+                if (run.optString("event") !in setOf("push", "pull_request", "workflow_dispatch")) continue
+                val number = run.optInt("run_number", -1)
+                if (number < 0) continue
+                val version = "0.1.$number"
+                if (!VersionComparator.isNewer(version, installed)) continue
+                if (bestVersion == null || VersionComparator.isNewer(version, bestVersion)) {
+                    val page = run.optString("html_url")
+                    if (!page.startsWith("https://github.com/AmaroPSJunior/WiFi-Captive-Portal/actions/runs/")) continue
+                    bestVersion = version
+                    bestUrl = page
+                }
+            }
+            if (bestVersion != null && bestUrl != null) Result.BuildAvailable(bestVersion, bestUrl) else null
+        } finally { con.disconnect() }
+    }
+
 }
