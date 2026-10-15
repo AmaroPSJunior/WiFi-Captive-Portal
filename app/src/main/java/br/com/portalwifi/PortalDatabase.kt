@@ -8,6 +8,9 @@ import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
@@ -41,8 +44,17 @@ data class PaymentRecord(
     val syncedAt: Long? = null
 )
 
+@Entity(tableName = "app_settings")
+data class AppSetting(@PrimaryKey val key: String, val value: String)
+
 @Dao
 interface PortalDao {
+    @Query("SELECT value FROM app_settings WHERE `key` = :key LIMIT 1")
+    suspend fun setting(key: String): String?
+    @Query("SELECT EXISTS(SELECT 1 FROM app_settings WHERE `key` = :key)")
+    suspend fun hasSetting(key: String): Boolean
+    @Upsert suspend fun putSetting(value: AppSetting)
+
     @Insert suspend fun insertSession(session: AccessSession)
     @Insert suspend fun insertPayment(payment: PaymentRecord)
     @Query("SELECT * FROM access_sessions WHERE id = :id LIMIT 1")
@@ -51,11 +63,17 @@ interface PortalDao {
     suspend fun paymentsForSession(sessionId: String): List<PaymentRecord>
 }
 
-@Database(entities = [AccessSession::class, PaymentRecord::class], version = 1, exportSchema = false)
+@Database(entities = [AccessSession::class, PaymentRecord::class, AppSetting::class], version = 2, exportSchema = false)
 abstract class PortalDatabase : RoomDatabase() {
     abstract fun dao(): PortalDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `app_settings` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))")
+            }
+        }
+
         @Volatile private var instance: PortalDatabase? = null
         fun get(context: Context): PortalDatabase =
             instance ?: synchronized(this) {
@@ -63,7 +81,7 @@ abstract class PortalDatabase : RoomDatabase() {
                     context.applicationContext,
                     PortalDatabase::class.java,
                     "portal-local.db"
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
             }
     }
 }
