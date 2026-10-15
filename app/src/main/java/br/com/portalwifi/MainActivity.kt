@@ -65,6 +65,11 @@ class MainActivity : Activity() {
     private lateinit var primary: Button
     private lateinit var qrView: ImageView
     private lateinit var qrHelp: TextView
+    private lateinit var portalQrView: ImageView
+    private lateinit var portalAddressView: TextView
+    private lateinit var portalStatusView: TextView
+    private lateinit var portalCopyButton: Button
+    private var portalUrl: String? = null
     private val portalSettings by lazy { PortalSettings(this) }
     private lateinit var sitesList: LinearLayout
     private lateinit var speedValue: TextView
@@ -168,7 +173,7 @@ class MainActivity : Activity() {
         copyWifi.setOnClickListener { copy("Nome da rede", networkName) }
         copyPass.setOnClickListener { copy("Senha", if (reservation != null) networkPassword else "") }
         add(hero, copies, 14)
-        qrHelp = label("Inicie o hotspot para gerar o QR Code real da rede.", 13f, muted)
+        qrHelp = label("① Conectar no Wi-Fi — escaneie com a câmera.", 14f, Color.WHITE, true)
         add(hero, qrHelp, 18)
         qrView = ImageView(this).apply {
             contentDescription = "QR Code para conectar ao Wi-Fi"
@@ -180,6 +185,25 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(12)
         })
         add(hero, label("O QR Code usa sempre as credenciais confirmadas pelo Android.", 12f, muted), 10)
+        add(hero, label("② Abrir portal — escaneie depois de conectar ao Wi-Fi.", 14f, Color.WHITE, true), 18)
+        portalQrView = ImageView(this).apply {
+            contentDescription = "QR Code com casinha para abrir o portal HTTP"
+            setBackgroundColor(Color.WHITE)
+            visibility = View.GONE
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        hero.addView(portalQrView, LinearLayout.LayoutParams(dp(240), dp(240)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(12)
+        })
+        portalStatusView = label("Servidor HTTP: desligado", 13f, muted)
+        add(hero, portalStatusView, 12)
+        portalAddressView = label("Endereço: indisponível", 14f, Color.WHITE, true)
+        add(hero, portalAddressView, 6)
+        portalCopyButton = action("Copiar endereço do portal", Color.rgb(30, 100, 136), Color.rgb(54, 56, 125)).apply {
+            isEnabled = false
+            setOnClickListener { portalUrl?.let { copy("Endereço do portal", it) } }
+        }
+        add(hero, portalCopyButton, 10)
         val editNetwork = action("✎  Editar nome e senha do Wi-Fi", Color.rgb(42, 77, 121), Color.rgb(64, 47, 117))
         add(hero, editNetwork, 10)
         editNetwork.setOnClickListener { editWifiConfiguration() }
@@ -521,6 +545,34 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    /** Usa o IPv4 da interface ap0 real, nunca um gateway presumido. */
+    private fun updatePortalAddress(listening: Boolean = server?.isListening == true) {
+        if (!::portalQrView.isInitialized) return
+        val ip = try {
+            NetworkInterface.getByName("ap0")?.inetAddresses?.toList()
+                ?.filterIsInstance<java.net.Inet4Address>()
+                ?.firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+                ?.hostAddress
+        } catch (_: Exception) { null }
+        val ready = reservation != null && listening && !ip.isNullOrBlank()
+        portalUrl = if (ready) "http://$ip:8080/" else null
+        portalStatusView.text = when {
+            reservation == null -> "Servidor HTTP: desligado"
+            !listening -> "Servidor HTTP: aguardando porta 8080"
+            ip == null -> "Servidor HTTP ativo, mas IP de ap0 indisponível"
+            else -> "Servidor HTTP: ativo na porta 8080"
+        }
+        portalAddressView.text = "Endereço: ${portalUrl ?: "indisponível"}"
+        portalCopyButton.isEnabled = ready
+        portalQrView.visibility = if (ready) View.VISIBLE else View.GONE
+        if (ready) try {
+            portalQrView.setImageBitmap(WifiQr.urlBitmap(portalUrl!!))
+        } catch (_: Exception) {
+            portalQrView.visibility = View.GONE
+            portalStatusView.text = "QR indisponível; use o endereço em texto"
+        }
+    }
+
     private fun refreshQr() {
         if (reservation == null || networkName == "Aguardando inicialização" ||
             networkPassword.length < 8 || networkPassword == "Consulte as configurações") {
@@ -601,9 +653,11 @@ class MainActivity : Activity() {
                     passwordView.text = "Senha: $networkPassword"
                     refreshQr()
                     startedAt = System.currentTimeMillis()
-                    server = LocalServer({ portalSettings.title }) { _ ->
+                    server = LocalServer({ portalSettings.title }, { _ ->
                         runOnUiThread { visits++; counterView.text = visits.toString() }
-                    }.apply {
+                    }, { listening ->
+                        runOnUiThread { updatePortalAddress(listening) }
+                    }).apply {
                         bytesPerSecond = kbps * 1024
                         maxMinutes = minutes
                         start()
@@ -665,6 +719,7 @@ class MainActivity : Activity() {
         oldReservation?.close()
         startedAt = 0L
         if (::qrView.isInitialized) refreshQrOff()
+        if (::portalQrView.isInitialized) updatePortalAddress(false)
         networkName = "Aguardando inicialização"
         networkPassword = "••••••••"
         if (::ssidView.isInitialized) ssidView.text = "Rede: $networkName"
