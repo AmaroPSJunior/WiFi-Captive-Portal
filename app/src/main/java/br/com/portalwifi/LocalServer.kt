@@ -41,17 +41,22 @@ class LocalServer(private val titleProvider: () -> String, private val onVisit: 
                 val path = first.split(' ').getOrNull(1) ?: "/"
                 for (i in 0..31) { if (readLine(input).isNullOrEmpty()) break }
                 val expired = System.currentTimeMillis() - startedAt > maxMinutes.toLong() * 60000
-                val permitted = path == "/" || path == "/index.html" || path == "/health"
-                val code = if (expired) 403 else if (permitted) 200 else 404
+                val probe = path.substringBefore('?') in setOf("/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html", "/connecttest.txt", "/ncsi.txt")
+                // Os probes so funcionam se a requisicao chegar ao servidor local.
+                val permitted = path == "/" || path == "/index.html" || path == "/health" || probe
+                val code = if (expired) 403 else if (!permitted) 404 else if (probe) 302 else 200
                 if (code == 200 && path != "/health") onVisit(client.inetAddress.hostAddress ?: "?")
                 val body = when {
                     expired -> "<h1>Sessão encerrada</h1>"
                     !permitted -> "<h1>Página não disponível</h1>"
                     path == "/health" -> "OK"
+                    probe -> ""
                     else -> landingPage(titleProvider())
                 }
                 val bytes = body.toByteArray(Charsets.UTF_8)
-                val header = "HTTP/1.1 $code OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
+                val reason = when (code) { 200 -> "OK"; 302 -> "Found"; 403 -> "Forbidden"; else -> "Not Found" }
+                val location = if (code == 302) "Location: /\r\n" else ""
+                val header = "HTTP/1.1 $code $reason\r\n${location}Content-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
                 val out = client.getOutputStream()
                 out.write(header.toByteArray(Charsets.UTF_8))
                 val limit = bytesPerSecond.coerceAtLeast(1024)
@@ -79,8 +84,8 @@ class LocalServer(private val titleProvider: () -> String, private val onVisit: 
             border-radius:24px;background:linear-gradient(130deg,#093c44,#1c1b50)}
             h1{color:#5ff0c7}p{line-height:1.5}small{color:#b5c5d8}
             </style></head><body><main><h1>$safe</h1>
-            <p>Você está conectado à rede local.</p>
-            <small>Este hotspot não fornece acesso à internet. Abra este endereço manualmente no navegador.</small>
+            <p>Bem-vindo! Seu dispositivo está conectado ao Wi-Fi.</p><p>Em breve, contratação de acesso à internet por Pix.</p>
+            <small>Protótipo: nenhuma cobrança ou liberação de internet está ativa. Abra o endereço local manualmente; a abertura automática depende de integração com DNS e gateway.</small>
             </main></body></html>"""
     }
     private fun readLine(input: BufferedInputStream): String? {
