@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 
 class PortalSettings(context: Context) {
-    private val prefs = context.getSharedPreferences("portal", Context.MODE_PRIVATE)
+    private val prefs = SettingsStore(context)
     var title: String
         get() = prefs.getString("landing_title", "Bem-vindo ao Portal Wi-Fi") ?: "Bem-vindo ao Portal Wi-Fi"
         set(value) { prefs.edit().putString("landing_title", value.trim().take(80)).apply() }
