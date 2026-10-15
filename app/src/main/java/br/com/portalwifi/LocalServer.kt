@@ -7,10 +7,12 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 /** Limites apenas para HTTP local; não atua sobre todo o tráfego Wi-Fi. */
-class LocalServer(private val titleProvider: () -> String, private val onVisit: (String) -> Unit) {
+class LocalServer(private val titleProvider: () -> String, private val onVisit: (String) -> Unit, private val onListening: (Boolean) -> Unit = {}) {
     private val running = AtomicBoolean(false)
     private val executor = Executors.newCachedThreadPool()
-    private var listener: ServerSocket? = null
+    @Volatile private var listener: ServerSocket? = null
+    @Volatile var isListening: Boolean = false
+        private set
     @Volatile var bytesPerSecond: Int = 128 * 1024
     @Volatile var maxMinutes: Int = 30
     private var startedAt = 0L
@@ -21,6 +23,8 @@ class LocalServer(private val titleProvider: () -> String, private val onVisit: 
             try {
                 ServerSocket(8080).use { ss ->
                     listener = ss
+                    isListening = true
+                    onListening(true)
                     while (running.get()) {
                         val client = ss.accept()
                         executor.execute { serve(client) }
@@ -29,7 +33,7 @@ class LocalServer(private val titleProvider: () -> String, private val onVisit: 
             } catch (_: SocketException) {
             } catch (_: Exception) {
                 running.set(false)
-            } finally { listener = null }
+            } finally { listener = null; isListening = false; onListening(false) }
         }
     }
     private fun serve(socket: Socket) {
