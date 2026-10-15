@@ -49,6 +49,15 @@ class WifiLaboratory(private val context: Context) {
                 connectivity.getNetworkCapabilities(connectivity.activeNetwork)
                     ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ?: false
             },
+            probe("Interface hotspot ap0 visível") { NetworkInterface.getByName("ap0") != null },
+            probe("Interface hotspot ap0 ativa") { NetworkInterface.getByName("ap0")?.isUp ?: false },
+            probe("Interface secundária ap1 visível") { NetworkInterface.getByName("ap1") != null },
+            probe("Interface secundária ap1 ativa") { NetworkInterface.getByName("ap1")?.isUp ?: false },
+            probe("Redes visíveis ao aplicativo (quantidade)") { connectivity.allNetworks.size },
+            probe("Rede padrão com capacidade INTERNET") {
+                connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+                    ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ?: false
+            },
             probe("Interfaces de rede (nomes)") {
                 NetworkInterface.getNetworkInterfaces()?.toList()?.map { it.name }?.sorted()?.joinToString(", ")
             },
@@ -67,6 +76,8 @@ class WifiLaboratory(private val context: Context) {
             appendLine()
             tests.forEach { appendLine(it) }
             appendLine()
+            appendLine("NOTA: ap0/ap1 são nomes comuns do chipset, não prova de compartilhamento ativo.")
+            appendLine("NOTA: detecção de interface e rede não equivale a permissão de firewall ou tethering.")
             appendLine("LIMITAÇÕES: sem root, sem modificar rede, sem acesso privilegiado.")
             appendLine("Resultado positivo de capacidade NÃO comprova controle de tethering ou filtragem.")
             appendLine("Dados de SSID, senhas, IPs, MACs e identificadores pessoais não são coletados.")
