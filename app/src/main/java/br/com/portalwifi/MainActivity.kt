@@ -331,6 +331,9 @@ class MainActivity : Activity() {
         val diagnostic = action("◉  Diagnóstico do hotspot", Color.rgb(30, 98, 120), Color.rgb(62, 52, 120))
         add(tools, diagnostic, 10)
         diagnostic.setOnClickListener { showNetworkDiagnosis() }
+        val laboratory = action("🔬  Laboratório Wi-Fi", Color.rgb(29, 111, 134), Color.rgb(76, 51, 148))
+        add(tools, laboratory, 10)
+        laboratory.setOnClickListener { showWifiLaboratory() }
         update.setOnClickListener { checkUpdate(update) }
         add(root, tools, 14)
     }
@@ -378,6 +381,64 @@ class MainActivity : Activity() {
             .setPositiveButton("Copiar relatório") { _, _ -> copy("Diagnóstico do hotspot", report) }
             .setNegativeButton("Fechar", null)
             .show()
+    }
+
+    private fun showWifiLaboratory() {
+        val lab = WifiLaboratory(this)
+        val options = arrayOf("Iniciar investigação", "Histórico e copiar relatório", "Limpar histórico")
+        AlertDialog.Builder(this).setTitle("Laboratório Wi-Fi • POCO X6 Pro")
+            .setItems(options) { _, index ->
+                when (index) {
+                    0 -> {
+                        Thread {
+                            try {
+                                val result = lab.investigate()
+                                runOnUiThread {
+                                    AlertDialog.Builder(this)
+                                        .setTitle("Investigação salva")
+                                        .setMessage(result.report)
+                                        .setPositiveButton("Copiar relatório") { _, _ -> copy("Relatório Wi-Fi", result.report) }
+                                        .setNegativeButton("Fechar", null).show()
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    AlertDialog.Builder(this).setTitle("Investigação não concluída")
+                                        .setMessage(e.javaClass.simpleName + ": " + (e.localizedMessage ?: "erro desconhecido"))
+                                        .setPositiveButton("OK", null).show()
+                                }
+                            }
+                        }.start()
+                    }
+                    1 -> Thread {
+                        val items = try { lab.history() } catch (_: Exception) { emptyList() }
+                        runOnUiThread {
+                            if (items.isEmpty()) {
+                                Toast.makeText(this, "Nenhuma investigação salva", Toast.LENGTH_LONG).show()
+                            } else {
+                                val fmt = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                                val labels = items.map { fmt.format(java.util.Date(it.createdAt)) }.toTypedArray()
+                                AlertDialog.Builder(this).setTitle("Histórico de investigações")
+                                    .setItems(labels) { _, selected ->
+                                        val report = items[selected].report
+                                        AlertDialog.Builder(this).setTitle(labels[selected])
+                                            .setMessage(report)
+                                            .setPositiveButton("Copiar relatório") { _, _ -> copy("Relatório Wi-Fi", report) }
+                                            .setNegativeButton("Fechar", null).show()
+                                    }.setNegativeButton("Fechar", null).show()
+                            }
+                        }
+                    }.start()
+                    2 -> AlertDialog.Builder(this).setTitle("Limpar histórico?")
+                        .setMessage("Isso remove apenas os relatórios do laboratório. As configurações do portal serão mantidas.")
+                        .setPositiveButton("Limpar") { _, _ ->
+                            Thread {
+                                lab.clear()
+                                runOnUiThread { Toast.makeText(this, "Histórico limpo", Toast.LENGTH_SHORT).show() }
+                            }.start()
+                        }
+                        .setNegativeButton("Cancelar", null).show()
+                }
+            }.setNegativeButton("Fechar", null).show()
     }
 
     private fun openTetherSettings() {
