@@ -738,14 +738,7 @@ class MainActivity : Activity() {
                         .setMessage("Deseja baixar o APK agora? Após o download, o Android solicitará confirmação para instalar. Se esta versão estiver assinada com outra chave, pode ser necessário desinstalar a anterior.")
                         .setPositiveButton("Baixar APK") { _, _ -> downloadApk(result.version, result.url, button) }
                         .setNegativeButton("Agora não", null).show()
-                    is UpdateChecker.Result.BuildAvailable -> AlertDialog.Builder(this)
-                        .setTitle("Build ${result.version} disponível")
-                        .setMessage("Encontramos uma compilação de teste mais recente no GitHub Actions. Ela ainda não é uma release assinada. O arquivo vem na seção Artifacts e pode exigir extração do ZIP; a assinatura de teste pode impedir instalar sobre a versão atual.")
-                        .setPositiveButton("Abrir build no GitHub") { _, _ ->
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.url)))
-                        }
-                        .setNegativeButton("Agora não", null).show()
-                    UpdateChecker.Result.UpToDate -> Toast.makeText(this, "Nenhuma atualização publicada ou build mais recente encontrado", Toast.LENGTH_LONG).show()
+                    UpdateChecker.Result.UpToDate -> Toast.makeText(this, "Você já possui a versão publicada mais recente", Toast.LENGTH_LONG).show()
                     is UpdateChecker.Result.Error -> AlertDialog.Builder(this)
                         .setTitle("Falha ao verificar atualização")
                         .setMessage(result.message)
