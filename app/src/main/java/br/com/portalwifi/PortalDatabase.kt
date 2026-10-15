@@ -47,6 +47,13 @@ data class PaymentRecord(
 @Entity(tableName = "app_settings")
 data class AppSetting(@PrimaryKey val key: String, val value: String)
 
+@Entity(tableName = "wifi_investigations")
+data class WifiInvestigation(
+    @PrimaryKey val id: String,
+    val createdAt: Long,
+    val report: String
+)
+
 @Dao
 interface PortalDao {
     @Query("SELECT value FROM app_settings WHERE `key` = :key LIMIT 1")
@@ -54,6 +61,12 @@ interface PortalDao {
     @Query("SELECT EXISTS(SELECT 1 FROM app_settings WHERE `key` = :key)")
     suspend fun hasSetting(key: String): Boolean
     @Upsert suspend fun putSetting(value: AppSetting)
+
+    @Insert suspend fun insertInvestigation(item: WifiInvestigation)
+    @Query("SELECT * FROM wifi_investigations ORDER BY createdAt DESC LIMIT 50")
+    suspend fun investigations(): List<WifiInvestigation>
+    @Query("DELETE FROM wifi_investigations")
+    suspend fun clearInvestigations()
 
     @Insert suspend fun insertSession(session: AccessSession)
     @Insert suspend fun insertPayment(payment: PaymentRecord)
@@ -63,7 +76,7 @@ interface PortalDao {
     suspend fun paymentsForSession(sessionId: String): List<PaymentRecord>
 }
 
-@Database(entities = [AccessSession::class, PaymentRecord::class, AppSetting::class], version = 2, exportSchema = false)
+@Database(entities = [AccessSession::class, PaymentRecord::class, AppSetting::class, WifiInvestigation::class], version = 3, exportSchema = false)
 abstract class PortalDatabase : RoomDatabase() {
     abstract fun dao(): PortalDao
 
@@ -74,6 +87,12 @@ abstract class PortalDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS wifi_investigations (id TEXT NOT NULL PRIMARY KEY, createdAt INTEGER NOT NULL, report TEXT NOT NULL)")
+            }
+        }
+
         @Volatile private var instance: PortalDatabase? = null
         fun get(context: Context): PortalDatabase =
             instance ?: synchronized(this) {
@@ -81,7 +100,7 @@ abstract class PortalDatabase : RoomDatabase() {
                     context.applicationContext,
                     PortalDatabase::class.java,
                     "portal-local.db"
-                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
             }
     }
 }
