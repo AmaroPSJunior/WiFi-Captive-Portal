@@ -54,7 +54,7 @@ class MainActivity : Activity() {
     private var networkName = "Aguardando inicialização"
     private var networkPassword = "••••••••"
     private var customNetworkRequested = false
-    private val prefs by lazy { getSharedPreferences("portal", MODE_PRIVATE) }
+    private val prefs by lazy { SettingsStore(this) }
     private val ticker by lazy(LazyThreadSafetyMode.NONE) { Handler(mainLooper) }
     private lateinit var stateLabel: TextView
     private lateinit var subLabel: TextView
