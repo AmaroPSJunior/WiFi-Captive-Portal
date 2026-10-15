@@ -80,17 +80,38 @@ class LocalServer(private val titleProvider: () -> String, private val onVisit: 
     private fun landingPage(title: String): String {
         val safe = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace("\"", "&quot;").replace("'", "&#39;")
-        return """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
-            <meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>Portal Wi-Fi</title><style>
-            body{margin:0;background:#070e21;color:white;font:18px system-ui;padding:24px}
-            main{max-width:540px;margin:8vh auto;padding:32px;border:1px solid #246383;
-            border-radius:24px;background:linear-gradient(130deg,#093c44,#1c1b50)}
-            h1{color:#5ff0c7}p{line-height:1.5}small{color:#b5c5d8}
-            </style></head><body><main><h1>$safe</h1>
-            <p>Bem-vindo! Seu dispositivo está conectado ao Wi-Fi.</p><p>Em breve, contratação de acesso à internet por Pix.</p>
-            <small>Protótipo: nenhuma cobrança ou liberação de internet está ativa. Abra o endereço local manualmente; a abertura automática depende de integração com DNS e gateway.</small>
-            </main></body></html>"""
+        return """<!doctype html><html lang="pt-BR"><head>
+            <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta name="color-scheme" content="dark"><title>Portal Wi-Fi • Pix</title>
+            <style>
+            *{box-sizing:border-box}body{margin:0;background:#080f20;color:#f6f9ff;font:16px system-ui,-apple-system,sans-serif;padding:20px}
+            main{max-width:510px;margin:5vh auto}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}
+            .brand{font-weight:800;font-size:19px}.pill{border:1px solid #27625b;color:#81f0c2;border-radius:40px;padding:7px 12px;font-size:12px}
+            .card{background:#121d33;border:1px solid #2e4666;border-radius:22px;padding:25px;margin:14px 0}
+            h1{font-size:28px;line-height:1.15;margin:8px 0 12px}h2{font-size:18px;margin:0 0 12px}p{color:#b9c8df;line-height:1.55}
+            .eyebrow{color:#82e7d5;font-weight:700;font-size:12px;letter-spacing:.12em}
+            .steps{display:grid;gap:12px;margin-top:18px}.step{display:flex;gap:12px;align-items:start}
+            .number{display:grid;place-items:center;flex-shrink:0;background:#24465d;border-radius:12px;width:32px;height:32px;color:#8af3d5;font-weight:800}
+            .step div:last-child{padding-top:4px}.price{font-size:29px;font-weight:800;color:white}
+            button{width:100%;border:0;border-radius:14px;padding:16px;background:#405168;color:#cbd5e1;font-weight:750;font-size:16px}
+            small{display:block;color:#a4b3cb;line-height:1.55;margin-top:13px}
+            .warning{border-left:3px solid #f9bd70;padding-left:12px;color:#ffd9a6}
+            footer{text-align:center;color:#8194ad;font-size:12px;margin:24px 0}
+            </style></head><body><main>
+            <header><div class="brand">◉ Portal Wi-Fi</div><span class="pill">✓ Rede conectada</span></header>
+            <section class="card"><div class="eyebrow">BEM-VINDO</div>
+            <h1>$safe</h1><p>Você já está conectado ao Wi-Fi local. Aqui você poderá contratar acesso à internet com pagamento Pix.</p></section>
+            <section class="card"><h2>Internet via Pix</h2>
+            <p>Plano e valor serão apresentados antes de qualquer cobrança.</p>
+            <div class="price">Em configuração</div>
+            <div class="steps">
+            <div class="step"><span class="number">1</span><div>Escolha o plano e confira o valor.</div></div>
+            <div class="step"><span class="number">2</span><div>Pague por Pix com código Copia e Cola ou QR Code.</div></div>
+            <div class="step"><span class="number">3</span><div>O pagamento será confirmado pelo servidor antes de qualquer liberação.</div></div>
+            </div><p class="warning">Pagamento ainda indisponível nesta versão de teste.</p>
+            <button type="button" disabled aria-disabled="true">Gerar Pix — em breve</button>
+            <small>Este hotspot é local e não fornece internet. O acesso externo dependerá de um mecanismo de compartilhamento validado no Xiaomi. Nenhum pagamento é cobrado agora.</small>
+            </section><footer>Portal Wi-Fi • Conexão local segura</footer></main></body></html>"""
     }
     private fun readLine(input: BufferedInputStream): String? {
         val s = StringBuilder()
