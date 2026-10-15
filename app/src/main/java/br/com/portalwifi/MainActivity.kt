@@ -184,10 +184,39 @@ class MainActivity : Activity() {
         add(hero, editNetwork, 10)
         editNetwork.setOnClickListener { editWifiConfiguration() }
 
+        val internetMode = Switch(this).apply {
+            text = "Habilitar internet (hotspot do Android)"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            isChecked = prefs.getBoolean("internet_mode", false)
+        }
+        add(hero, internetMode, 16)
+        add(hero, label("No modo internet, abra as configurações do Xiaomi para ativar o hotspot. A lista de sites NÃO filtra o acesso: todos os sites poderão abrir.", 12f, muted), 6)
+        internetMode.setOnCheckedChangeListener { button, enabled ->
+            if (enabled) {
+                AlertDialog.Builder(this)
+                    .setTitle("Compartilhamento sem filtro")
+                    .setMessage("O Android não permite que este aplicativo ative e filtre automaticamente o hotspot nativo. Ao ativá-lo nas configurações, os dispositivos poderão acessar qualquer site, não apenas os cadastrados. Deseja selecionar esse modo?")
+                    .setPositiveButton("Selecionar modo") { _, _ ->
+                        if (reservation != null) {
+                            shutdown()
+                            setState("PORTAL DESLIGADO", "Rede local encerrada para alternar o modo", false)
+                        }
+                        prefs.edit().putBoolean("internet_mode", true).apply()
+                        openTetherSettings()
+                    }
+                    .setNegativeButton("Cancelar") { _, _ -> button.isChecked = false }
+                    .setOnCancelListener { button.isChecked = false }
+                    .show()
+            } else {
+                prefs.edit().putBoolean("internet_mode", false).apply()
+                Toast.makeText(this, "Modo local selecionado. Desative o hotspot nativo nas configurações, se estiver ativo.", Toast.LENGTH_LONG).show()
+            }
+        }
         add(hero, label("ⓘ Rede local isolada • Não compartilha internet", 12f, muted), 16)
         primary = action("▶  INICIAR PORTAL", Color.rgb(19, 125, 232), Color.rgb(76, 60, 236))
         add(hero, primary, 18)
-        primary.setOnClickListener { if (reservation == null) startPortal() else { shutdown(); setState("PORTAL DESLIGADO", "Rede local encerrada", false) } }
+        primary.setOnClickListener { if (internetMode.isChecked) openTetherSettings() else if (reservation == null) startPortal() else { shutdown(); setState("PORTAL DESLIGADO", "Rede local encerrada", false) } }
         add(root, hero, 20)
 
         val settings = card()
@@ -348,6 +377,21 @@ class MainActivity : Activity() {
             .setMessage(report)
             .setPositiveButton("Copiar relatório") { _, _ -> copy("Diagnóstico do hotspot", report) }
             .setNegativeButton("Fechar", null)
+            .show()
+    }
+
+    private fun openTetherSettings() {
+        AlertDialog.Builder(this)
+            .setTitle("Ativar internet no Xiaomi")
+            .setMessage("O próximo passo é ativar manualmente o hotspot Wi-Fi do Android. Neste modo não há bloqueio por sites autorizados. O app não afirma que a internet está ativa sem confirmação do sistema.")
+            .setPositiveButton("Abrir configurações") { _, _ ->
+                try {
+                    startActivity(Intent("android.settings.TETHER_SETTINGS"))
+                } catch (_: Exception) {
+                    startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                }
+            }
+            .setNegativeButton("Cancelar", null)
             .show()
     }
 
