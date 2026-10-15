@@ -1,4 +1,4 @@
-plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.kapt") }
 val tag = System.getenv("GITHUB_REF_NAME")?.takeIf { it.matches(Regex("v[0-9]+\\.[0-9]+\\.[0-9]+")) }
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 android {
@@ -35,5 +35,8 @@ android {
 }
 dependencies {
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
     testImplementation("junit:junit:4.13.2")
 }
